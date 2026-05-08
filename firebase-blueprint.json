@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System operative profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["USER", "ADMIN"] },
+        "avatar": { "type": "string" },
+        "level": { "type": "number" },
+        "rep": { "type": "string", "enum": ["GOOD", "NEUTRAL", "BAD"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "License": {
+      "title": "License",
+      "description": "Authorization token for tools",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "key": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["WEEKLY", "MONTHLY", "PERMANENT"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "EXPIRED", "REVOKED"] },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "hwid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["key", "userId", "type", "status", "expiresAt"]
+    },
+    "Tool": {
+      "title": "Tool",
+      "description": "Cryptographic asset in the vault",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "desc": { "type": "string" },
+        "category": { "type": "string", "enum": ["TOOLS", "FILES", "SCRIPTS", "PREMIUM"] },
+        "tier": { "type": "string", "enum": ["BASIC", "PREMIUM"] },
+        "price": { "type": "string" },
+        "icon": { "type": "string" },
+        "locked": { "type": "boolean" },
+        "downloadUrl": { "type": "string" }
+      },
+      "required": ["name", "category", "tier"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial ledger record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "planId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["PENDING", "PAID", "CANCELLED"] },
+        "method": { "type": "string" },
+        "proof": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "planId", "amount", "status"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Support message thread",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "message": { "type": "string" },
+        "sender": { "type": "string", "enum": ["USER", "ADMIN"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "message", "sender", "timestamp"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "System event trace",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "event": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      },
+      "required": ["userId", "event", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Operative profiles"
+    },
+    "/licenses/{licenseId}": {
+      "schema": "License",
+      "description": "Authorization protocols"
+    },
+    "/tools/{toolId}": {
+      "schema": "Tool",
+      "description": "Vault assets"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial logs"
+    },
+    "/activity_logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "System traces"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Support messages"
+    }
+  }
+}

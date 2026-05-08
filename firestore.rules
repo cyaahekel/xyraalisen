@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isAdmin() { return isSignedIn() && (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || request.auth.token.email == 'sahanazri10@gmail.com'); }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- Validation Blueprints ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid == request.auth.uid &&
+             data.email == request.auth.token.email &&
+             data.role in ['USER', 'ADMIN'] &&
+             data.role == 'USER'; // Default role for users
+    }
+
+    function isValidLicense(data) {
+      return data.keys().hasAll(['key', 'userId', 'type', 'status', 'expiresAt']) &&
+             data.key is string && data.key.size() <= 64 &&
+             data.userId == request.auth.uid &&
+             data.type in ['WEEKLY', 'MONTHLY', 'PERMANENT'] &&
+             data.status in ['ACTIVE', 'EXPIRED', 'REVOKED'] &&
+             data.expiresAt is timestamp;
+    }
+
+    function isValidTool(data) {
+      return data.keys().hasAll(['name', 'category', 'tier']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.category in ['TOOLS', 'FILES', 'SCRIPTS', 'PREMIUM'] &&
+             data.tier in ['BASIC', 'PREMIUM'];
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['userId', 'planId', 'amount', 'status']) &&
+             data.userId == request.auth.uid &&
+             data.planId is string &&
+             data.amount is number &&
+             data.status == 'PENDING';
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['userId', 'message', 'sender', 'timestamp']) &&
+             data.userId is string &&
+             data.message is string && data.message.size() <= 1000 &&
+             data.sender in ['USER', 'ADMIN'] &&
+             data.timestamp is timestamp;
+    }
+
+    // --- Collections ---
+
+    // USERS
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isAdmin();
+      allow create: if isVerified() && isValidId(userId) && isValidUser(incoming());
+      allow update: if isVerified() && isValidId(userId) && isOwner(userId) && 
+                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatar', 'level', 'rep', 'lastFreeKeyAt']) &&
+                      incoming().role == existing().role;
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // LICENSES
+    match /licenses/{licenseId} {
+      allow get: if isVerified() && isValidId(licenseId) && (isOwner(existing().userId) || isAdmin());
+      allow list: if isVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(licenseId) && isValidLicense(incoming());
+      allow update: if isVerified() && isValidId(licenseId) && (
+        isAdmin() || 
+        (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['hwid']) && 
+         (existing().type in ['MONTHLY', 'PERMANENT']))
+      );
+      allow delete: if isAdmin() && isValidId(licenseId);
+    }
+
+    // TOOLS
+    match /tools/{toolId} {
+      allow read: if isValidId(toolId);
+      allow create, update, delete: if isAdmin() && isValidId(toolId);
+    }
+
+    // TRANSACTIONS
+    match /transactions/{transactionId} {
+      allow get: if isVerified() && isValidId(transactionId) && (isOwner(existing().userId) || isAdmin());
+      allow list: if isVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(transactionId) && isValidTransaction(incoming());
+      allow update: if isVerified() && isValidId(transactionId) && (
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['proof']))
+      );
+      allow delete: if isAdmin() && isValidId(transactionId);
+    }
+
+    // CHATS
+    match /chats/{chatId} {
+      allow get: if isVerified() && isValidId(chatId) && (isOwner(existing().userId) || isAdmin());
+      allow list: if isVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(chatId) && isValidChat(incoming()) && (
+        (incoming().sender == 'USER' && incoming().userId == request.auth.uid) ||
+        (incoming().sender == 'ADMIN' && isAdmin())
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ACTIVITY LOGS
+    match /activity_logs/{logId} {
+      allow get: if isVerified() && isValidId(logId) && (isOwner(existing().userId) || isAdmin());
+      allow list: if isVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(logId) && incoming().userId == request.auth.uid;
+      allow delete: if isAdmin() && isValidId(logId);
+    }
+
+    // ADMINS (Special Collection)
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Managed via Firebase Console
+    }
+  }
+}
